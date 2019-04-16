@@ -22,6 +22,7 @@ import com.graphhopper.jsprit.core.algorithm.listener.SearchStrategyListener;
 import com.graphhopper.jsprit.core.algorithm.listener.SearchStrategyModuleListener;
 import com.graphhopper.jsprit.core.algorithm.listener.VehicleRoutingAlgorithmListener;
 import com.graphhopper.jsprit.core.algorithm.listener.VehicleRoutingAlgorithmListeners;
+import com.graphhopper.jsprit.core.algorithm.pauser.PauserAlgorithm;
 import com.graphhopper.jsprit.core.algorithm.termination.PrematureAlgorithmTermination;
 import com.graphhopper.jsprit.core.problem.VehicleRoutingProblem;
 import com.graphhopper.jsprit.core.problem.job.Job;
@@ -60,6 +61,25 @@ public class VehicleRoutingAlgorithm {
         public boolean isPrematureBreak(DiscoveredSolution discoveredSolution) {
             for (PrematureAlgorithmTermination termination : terminationCriteria) {
                 if (termination.isPrematureBreak(discoveredSolution))
+                    return true;
+            }
+            return false;
+        }
+    }
+
+
+    private static class PauseManager implements PauserAlgorithm {
+
+        private Collection<PauserAlgorithm> pauseCriteria = new ArrayList<PauserAlgorithm>();
+
+        void addPauser(PauserAlgorithm pauser) {
+            pauseCriteria.add(pauser);
+        }
+
+        @Override
+        public boolean isPause(DiscoveredSolution discoveredSolution) {
+            for (PauserAlgorithm pauser : pauseCriteria) {
+                if (pauser.isPause(discoveredSolution))
                     return true;
             }
             return false;
@@ -106,6 +126,8 @@ public class VehicleRoutingAlgorithm {
     private int maxIterations = 100;
 
     private TerminationManager terminationManager = new TerminationManager();
+
+    private PauseManager pauseManager = new PauseManager();
 
     private VehicleRoutingProblemSolution bestEver = null;
 
@@ -195,6 +217,22 @@ public class VehicleRoutingAlgorithm {
     }
 
     /**
+     * @param pauserAlgorithm the pause criterion
+     */
+    public void addPauseCriterion(PauserAlgorithm pauserAlgorithm) {
+        pauseManager.addPauser(pauserAlgorithm);
+    }
+
+    /*
+     * @param pauserAlgorithm the pause criterion
+     */
+    public void setPauserAlgorithm(PauserAlgorithm pauserAlgorithm) {
+        pauseManager = new PauseManager();
+        pauseManager.addPauser(pauserAlgorithm);
+    }
+
+
+    /**
      * Gets the {@link SearchStrategyManager}.
      *
      * @return SearchStrategyManager
@@ -240,6 +278,18 @@ public class VehicleRoutingAlgorithm {
                 logger.info("premature algorithm termination at iteration {}", (i + 1));
                 noIterationsThisAlgoIsRunning = (i + 1);
                 break;
+            }
+
+            if(pauseManager.isPause(discoveredSolution)){
+                logger.info("iterations paused at {} iterations", (i + 1));
+                while (true){
+
+                    if(pauseManager.isPause(discoveredSolution)){
+                        logger.info("iterations resume at {} iterations", (i + 1));
+                        break;
+                    }
+
+                }
             }
             iterationEnds(i + 1, problem, solutions);
         }
